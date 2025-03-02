@@ -8,6 +8,7 @@ from utils import get_center_of_bbox, get_bbox_width
 import cv2
 import numpy as np
 import pandas as pd
+import math
 
 class TrackerDarts:
     def __init__(self, model_path):
@@ -24,14 +25,6 @@ class TrackerDarts:
             #print("ciao", detections)
             #break
         return detections
-    
-    def add_position_to_tracks(sekf,tracks):
-        for object, object_tracks in tracks.items():
-            for frame_num, track in enumerate(object_tracks):
-                for track_id, track_info in track.items():
-                    bbox = track_info['bbox']
-                    position= get_center_of_bbox(bbox)
-                    tracks[object][frame_num][track_id]['position'] = position
     
     def interpolate_tip_positions(self, tip_positions):
         """
@@ -66,6 +59,7 @@ class TrackerDarts:
     def get_object_tracks(self, frames, read_from_stub=False, stub_path=None):
         """
         Process the frames, detect objects, and track their positions.
+        Link dart components together while handling missing detections and merging virtual darts with real ones.
         """
         if read_from_stub and stub_path is not None and os.path.exists(stub_path):
             with open(stub_path, 'rb') as f:
@@ -73,55 +67,110 @@ class TrackerDarts:
             return tracks
         else:
             detections = self.detect_frames(frames)
-            
+
             tracks = {
-                "darts": [],
+                "darts": [],  # Full dart detections
                 "tips": [],
                 "barrels": [],
                 "shafts": [],
-                "flights": []
+                "flights": [],
+                "linked_darts": [],
+                "virtual_darts": {}  # Keep track of virtual darts
             }
 
-            # Process each frame
+            all_detected_parts = []
+            detected_darts = {}
+            
+            # Process each frame and detect parts
             for frame_num, detection in enumerate(detections):
                 cls_names = detection.names
                 cls_names_inv = {v: k for k, v in cls_names.items()}
-                
-                # Supervision of detections
+
                 detection_supervision = sv.Detections.from_ultralytics(detection)
                 detections_with_tracks = self.tracker.update_with_detections(detection_supervision)
 
-                # Initialize lists to store track information for each frame
                 tracks["darts"].append({})
                 tracks["tips"].append({})
                 tracks["barrels"].append({})
                 tracks["shafts"].append({})
                 tracks["flights"].append({})
+                tracks["linked_darts"].append({})
 
-                dart_count = 0  # Initialize dart count for the board
                 
-                # Process detections in each frame
+                detected_parts = []
+
+                # Step 1: Detect parts and link to darts (if possible)
                 for frame_detection in detections_with_tracks:
                     bbox = frame_detection[0].tolist()
                     cls_id = frame_detection[3]
                     track_id = frame_detection[4]
 
-                    # Track the detected objects based on class ID
                     if cls_id == cls_names_inv["Dart"]:
+                        detected_darts[track_id] = {"bbox": bbox, "parts": {"tip": None, "barrel": None, "shaft": None, "flight": None, "frame_num": frame_num}}
                         tracks["darts"][frame_num][track_id] = {"bbox": bbox}
-                        dart_count += 1  # Increase dart count when a dart is detected
 
-                    if cls_id == cls_names_inv["Tip"]:
+                    elif cls_id == cls_names_inv["Tip"]:
+                        detected_parts.append(("tip", track_id, bbox))
                         tracks["tips"][frame_num][track_id] = {"bbox": bbox}
 
-                    if cls_id == cls_names_inv["Barrel"]:
+                    elif cls_id == cls_names_inv["Barrel"]:
+                        detected_parts.append(("barrel", track_id, bbox))
                         tracks["barrels"][frame_num][track_id] = {"bbox": bbox}
 
-                    if cls_id == cls_names_inv["Shaft"]:
+                    elif cls_id == cls_names_inv["Shaft"]:
+                        detected_parts.append(("shaft", track_id, bbox))
                         tracks["shafts"][frame_num][track_id] = {"bbox": bbox}
 
-                    if cls_id == cls_names_inv["Flight"]:
+                    elif cls_id == cls_names_inv["Flight"]:
+                        detected_parts.append(("flight", track_id, bbox))
                         tracks["flights"][frame_num][track_id] = {"bbox": bbox}
+
+                all_detected_parts.append((frame_num, detected_parts))
+
+            # Step 2: Associate parts to darts after all frames have been processed
+            for frame_num, detected_parts in all_detected_parts:
+                # Associate each part with the closest dart from previous frames (with time constraint)
+                for part_name, part_id, part_bbox in detected_parts:
+                    
+                    linked_dart_id = self.find_closest_dart(part_bbox, detected_darts, frame_num)
+                    
+                    if linked_dart_id is not None:
+                        # If the part is linked to an existing dart, link it
+                        if detected_darts[linked_dart_id]["parts"][part_name] is None:
+                            detected_darts[linked_dart_id]["parts"][part_name] = part_id
+                            tracks["linked_darts"][frame_num][linked_dart_id] = detected_darts[linked_dart_id]
+                        else:
+                            # If part already exists, create a virtual dart
+                            virtual_dart_id = f"virtual_{part_id}"
+                            tracks["virtual_darts"][virtual_dart_id] = {
+                                "bbox": part_bbox,
+                                "parts": {part_name: part_id, "tip": None, "barrel": None, "shaft": None, "flight": None}
+                            }
+                            detected_darts[virtual_dart_id] = tracks["virtual_darts"][virtual_dart_id]
+                            tracks["linked_darts"][frame_num][virtual_dart_id] = tracks["virtual_darts"][virtual_dart_id]
+
+                    else:
+                        # If part not linked, create a virtual dart
+                        virtual_dart_id = f"virtual_{part_id}"
+                        tracks["virtual_darts"][virtual_dart_id] = {
+                            "bbox": part_bbox,
+                            "parts": {part_name: part_id, "tip": None, "barrel": None, "shaft": None, "flight": None}
+                        }
+                        # Add virtual dart to detected_darts
+                        detected_darts[virtual_dart_id] = tracks["virtual_darts"][virtual_dart_id]
+                        tracks["linked_darts"][frame_num][virtual_dart_id] = tracks["virtual_darts"][virtual_dart_id]
+
+            # Step 3: Merge virtual darts with real darts when close enough
+            for dart_id, dart_data in detected_darts.items():
+                for virtual_dart_id, virtual_dart_data in list(tracks["virtual_darts"].items()):
+                    if self.are_bboxes_close(dart_data["bbox"], virtual_dart_data["bbox"]):
+                        # Merge virtual dart with real dart
+                        for part_name, part_id in virtual_dart_data["parts"].items():
+                            if part_id is not None and dart_data["parts"][part_name] is None:
+                                dart_data["parts"][part_name] = part_id
+
+                        # Remove virtual dart since it's now linked to a real one
+                        del tracks["virtual_darts"][virtual_dart_id]
 
                 """"
                 # If we already have 3 darts, stop interpolating until new darts are thrown
@@ -135,12 +184,80 @@ class TrackerDarts:
                     new_tip_positions = {track_id: tracks["tips"][frame_num][track_id] for track_id in last_interpolated_darts}
                     tracks["tips"][frame_num] = self.interpolate_tip_positions(new_tip_positions)
                     self.last_interpolated_darts.extend([track_id for track_id in tracks["tips"][frame_num].keys() if track_id not in self.last_interpolated_darts])
+                    this part is to be corrected
                 """
             if stub_path is not None:
                 with open(stub_path, 'wb') as f:
                     pickle.dump(tracks, f)
-
+            print ("tracks[linked_darts]", tracks["linked_darts"])
             return tracks
+        
+        
+    def find_closest_dart(self,part_bbox, detected_darts, frame_num, frame_window=30): #as a standard i put 30, because most of the videos are 30fps
+        """
+        Find the closest dart to the given part based on the bounding box center,
+        considering a window of frames before and after the current frame.
+        
+        :param part: The part bounding box in the form [x1, y1, x2, y2] for the current frame.
+        :param detected_darts: List of detected darts in the form of tuples [(bbox, frame_num), ...].
+        :param frame_num: The frame number to filter the darts by.
+        :param frame_window: The number of frames before and after to consider when matching darts to parts.
+        
+        :return: The closest dart's bounding box or None if no dart is found.
+        """
+    
+
+        closest_dart = None
+        closest_distance = float('inf')  # Initialize to a large value
+        
+        # Calculate the center of the part bounding box
+        part_center_x, part_center_y = get_center_of_bbox(part_bbox)
+        
+        # Loop through darts in a window of frames (before and after the current frame)
+        for dart_id, dart_data in detected_darts.items():  # Iterate over tracked darts
+            dart_bbox = dart_data["bbox"]  # Extract bounding box
+            dart_frame_num = dart_data["frame_num"]  # Extract frame number
+
+            # Check if the dart is within the valid frame window
+            if abs(dart_frame_num - frame_num) <= frame_window:
+                dart_center_x, dart_center_y = get_center_of_bbox(dart_bbox)
+
+                # Compute distance from part to dart center
+                distance = math.sqrt((part_center_x - dart_center_x)**2 + (part_center_y - dart_center_y)**2)
+
+                # Update the closest dart if it's the closest so far
+                if distance < closest_distance:
+                    closest_distance = distance
+                    closest_dart = dart_id  # Store the dart ID instead of the bbox
+                    
+        return closest_dart
+        
+    def are_bboxes_close(self,bbox1, bbox2, threshold=50):
+        """
+        Check if two bounding boxes are close to each other based on their center distance.
+        
+        :param bbox1: The first bounding box as [x1, y1, x2, y2].
+        :param bbox2: The second bounding box as [x1, y1, x2, y2].
+        :param threshold: The maximum distance allowed between the centers of the two bounding boxes.
+        
+        :return: True if the bounding boxes are close, False otherwise.
+        """
+        
+        # Calculate the center of the first bounding box
+        center_x1 = (bbox1[0] + bbox1[2]) / 2
+        center_y1 = (bbox1[1] + bbox1[3]) / 2
+        
+        # Calculate the center of the second bounding box
+        center_x2 = (bbox2[0] + bbox2[2]) / 2
+        center_y2 = (bbox2[1] + bbox2[3]) / 2
+        
+        # Calculate the Euclidean distance between the centers of the two bounding boxes
+        distance = math.sqrt((center_x1 - center_x2)**2 + (center_y1 - center_y2)**2)
+        
+        # Check if the distance is less than or equal to the threshold
+        return distance <= threshold
+    
+    
             
             
          
@@ -152,10 +269,11 @@ class TrackerDarts:
             #print ("frame_num: ", frame_num)
             #print(f"Total Frames in Tracks: {len(tracks['Players'])}")
 
-            tip_dic = tracks["darts"][frame_num]
+            linked_darts_dic = tracks["linked_darts"][frame_num]
 
+            
             # Draw Tips
-            for track_id, tip in tip_dic.items():
+            for track_id, tip in linked_darts_dic.items():
                 frame = self.draw_ellipse(frame, tip["bbox"],track_id)
             
             """"
@@ -216,31 +334,5 @@ class TrackerDarts:
                 (0,0,0),
                 2
             )
-
-        return frame
-    
-    
-    def draw_triangle(self,frame,bbox): #in reality in the future i could also do a circle around the ball, it would look better probably. Anyway the ball doesn't work so much, because i should train more the model
-        y= int(bbox[1])
-        x,_ = get_center_of_bbox(bbox)
-
-        triangle_points = np.array([
-            [x,y],
-            [x-10,y-20],
-            [x+10,y-20],
-        ])
-        cv2.drawContours(frame, [triangle_points],0,(255, 255, 0), cv2.FILLED)
-        cv2.drawContours(frame, [triangle_points],0,(0,0,0), 2)
-
-        return frame
-    
-    
-    def draw_circle(self, frame, bbox):
-        x_center = (int)((bbox[0] + bbox[2])) // 2
-        y_center = (int)((bbox[1] + bbox[3])) // 2
-
-        radius = int(max(bbox[2] - bbox[0], bbox[3] - bbox[1]) * 0.6)  # 0.6 instead of 0.5
-
-        cv2.circle(frame, (x_center, y_center), radius, (255, 255, 0), thickness=2)
 
         return frame

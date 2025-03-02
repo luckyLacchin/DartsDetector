@@ -9,12 +9,9 @@ def main():
     tracker_darts = TrackerDarts('models/tracker_darts.pt')
     tracks_darts = tracker_darts.get_object_tracks(video_frames,read_from_stub=False,stub_path="stubs/track_stubs.pkl")
     
-    #get object positions 
-    tracker_darts.add_position_to_tracks(tracks_darts)
     
-    
-    output_video_frames = tracker_darts.draw_annotations(video_frames,tracks_darts)
-    save_video(output_video_frames, "outputs/output_video.avi") # save video
+    #output_video_frames = tracker_darts.draw_annotations(video_frames,tracks_darts)
+    #save_video(output_video_frames, "outputs/output_video.avi") # save video
     
     
     
