@@ -141,6 +141,7 @@ class TrackerDarts:
                         else:
                             # Part is already linked, check for virtual darts
                             self._link_part_to_virtual_dart(part_id, part_name, part_bbox, tracks, frame_num, detected_darts)
+                            
 
                     else:
                         # Part isn't linked to any dart, create a virtual dart
@@ -150,7 +151,12 @@ class TrackerDarts:
                 with open(stub_path, 'wb') as f:
                     pickle.dump(tracks, f)
 
-            print("tracks[linked_darts]", tracks["linked_darts"])
+            #print("tracks[linked_darts]", tracks["linked_darts"])
+            for frame_num, linked_darts_data in enumerate(tracks["linked_darts"]):
+                print(f"Starting linked_darts for frame {frame_num}:")
+                print(linked_darts_data)
+                if frame_num == 60:
+                    break
             return tracks
 
     def _link_part_to_virtual_dart(self, part_id, part_name, part_bbox, tracks, frame_num, detected_darts):
@@ -176,9 +182,10 @@ class TrackerDarts:
             dart_data_copy = {key: value for key, value in detected_darts[virtual_dart_id].items() if key != 'frame_num'}
             tracks["linked_darts"][frame_num][virtual_dart_id] = dart_data_copy
 
+
         
         
-    def find_closest_dart(self,part_bbox, detected_darts, frame_num, frame_window=30): #as a standard i put 30, because most of the videos are 30fps
+    def find_closest_dart(self,part_bbox, detected_darts, frame_num, frame_window=60): #as a standard i put 60, because most of the videos are 30760fps
         """
         Find the closest dart to the given part based on the bounding box center,
         considering a window of frames before and after the current frame.
@@ -247,33 +254,22 @@ class TrackerDarts:
             
             
          
-    def draw_annotations(self,video_frames, tracks):
-        output_video_frames= []
+    def draw_annotations(self, video_frames, tracks):
+        output_video_frames = []
+
         for frame_num, frame in enumerate(video_frames):
             frame = frame.copy()
-
-            #print ("frame_num: ", frame_num)
-            #print(f"Total Frames in Tracks: {len(tracks['Players'])}")
-
+            
             linked_darts_dic = tracks["linked_darts"][frame_num]
 
-            
-            # Draw Tips
-            for track_id, tip in linked_darts_dic.items():
-                frame = self.draw_ellipse(frame, tip["bbox"],track_id)
-            
-            """"
-            #Draw Referee
-            for _, referee in referee_dict.items():
-                frame = self.draw_ellipse(frame, referee["bbox"],(0,255,255))
-    
-            # Draw ball 
-            for track_id, ball in ball_dict.items():
-                frame = self.draw_circle(frame, ball["bbox"],(0,255,0))
-            """
+            for track_id, dart in linked_darts_dic.items():
+                
+                frame = self.draw_rectangle(frame, dart["bbox"])
+
             output_video_frames.append(frame)
 
         return output_video_frames
+
     
     
     def draw_ellipse(self,frame,bbox,track_id=None):
@@ -302,14 +298,12 @@ class TrackerDarts:
 
         if track_id is not None:
             cv2.rectangle(frame,
-                          (int(x1_rect),int(y1_rect) ),
+                          (int(x1_rect),int(y1_rect)),
                           (int(x2_rect),int(y2_rect)),
                           (255, 255, 0),
                           cv2.FILLED)
             
             x1_text = x1_rect+12
-            if track_id > 99:
-                x1_text -=10
             
             cv2.putText(
                 frame,
@@ -320,5 +314,30 @@ class TrackerDarts:
                 (0,0,0),
                 2
             )
+
+        return frame
+    
+    
+    def draw_rectangle(self, frame, bbox):
+        x1, y1, x2, y2 = bbox
+
+        cv2.rectangle(frame,
+                    (int(x1), int(y1)),
+                    (int(x2), int(y2)),
+                    (255, 255, 0),
+                    thickness=2)
+        
+        cv2.rectangle(frame,
+                    (int(x1)+10, int(y1)+20),
+                    (int(x2), int(y2)),
+                    (211, 211, 211),
+                    cv2.FILLED)
+        cv2.putText(frame,
+                    "Dart",
+                    (int(x1) + 10, int(y1) + 20),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.6,
+                    (0, 0, 0),
+                    2)
 
         return frame
