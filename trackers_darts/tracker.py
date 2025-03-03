@@ -20,41 +20,82 @@ class TrackerDarts:
         batch_size=20 
         detections = [] 
         for i in range(0,len(frames),batch_size):
-            detections_batch = self.model.predict(frames[i:i+batch_size],conf=0.6) #before the confidence was 0.1, I consider it too low
+            detections_batch = self.model.predict(frames[i:i+batch_size],conf=0.8) #before the confidence was 0.1, I consider it too low
             detections += detections_batch
             #print("ciao", detections)
             #break
         return detections
-    
-    def interpolate_tip_positions(self, tip_positions):
+
+    def interpolate_darts_positions(self, tracks):
         """
-        Interpolate tip positions until there are 3 darts on the board, keeping track_id.
-        Only interpolate the last 3 darts thrown.
+        Interpolates dart tip positions using tracks["linked_darts"] (which is a list of frames).
+        Interpolates for each dart from the first frame it appears to the last frame it appears.
         """
-        # Prepare data for interpolation: each entry should include track_id and bbox (x1, y1, x2, y2)
-        interpolated_data = []
+        linked_darts = tracks["linked_darts"]  # Extract linked darts from tracks
+        frame_keys = range(len(linked_darts))  # Create a range of frame indices (since it's a list)
 
-        # For each track_id in tip_positions, extract track_id and its corresponding bbox (x1, y1, x2, y2)
-        for track_id, data in tip_positions.items():
-            if "bbox" in data:
-                interpolated_data.append({"track_id": track_id, **data})
+        all_darts = []
 
-        # Convert to DataFrame for interpolation (track_id, x1, y1, x2, y2)
-        df_tip_positions = pd.DataFrame(interpolated_data, columns=["track_id", "x1", "y1", "x2", "y2"])
+        # Extract dart positions frame by frame
+        for frame_num in frame_keys:
+            frame_data = linked_darts[frame_num]
+            for track_id, data in frame_data.items():
+                if "bbox" in data:
+                    x1, y1, x2, y2 = data["bbox"]
+                    all_darts.append({"frame": frame_num, "track_id": track_id, "x1": x1, "y1": y1, "x2": x2, "y2": y2})
 
-        # If there are less than 3 darts, interpolate missing positions
-        if len(df_tip_positions) < 3:
-            df_tip_positions = df_tip_positions.interpolate()  # Interpolate missing positions
-            df_tip_positions = df_tip_positions.bfill()  # Backfill ensures any remaining missing values at the beginning are filled
+        #print("all darts: ", all_darts)
+        # Convert list to DataFrame
+        df_darts = pd.DataFrame(all_darts, columns=["frame", "track_id", "x1", "y1", "x2", "y2"])
+        #print(df_darts)
+        #print(f"items(): {df_darts.items()}")
 
-        # Recreate the tip positions with track_id and interpolated bbox
-        interpolated_tip_positions = {}
-        for _, row in df_tip_positions.iterrows():
-            interpolated_tip_positions[row["track_id"]] = {
+
+        # Interpolate for each dart from its first appearance to its last frame
+        for track_id in df_darts["track_id"].unique():
+            dart_data = df_darts[df_darts["track_id"] == track_id]
+            #print(dart_data)
+            if dart_data.empty:
+                continue
+            
+            first_frame = dart_data["frame"].min()
+            last_frame = dart_data["frame"].max()
+            
+            first_frame = int(first_frame)
+            last_frame = int(last_frame)
+            '''
+            print(f"first: {first_frame}")
+            print(f"last_frame: {last_frame}")
+            '''
+            # Interpolate from first to last frame
+            dart_data_interpolated = dart_data[dart_data["frame"] <= last_frame]
+            dart_data_interpolated = dart_data_interpolated.set_index("frame").reindex(range(first_frame, last_frame + 1))
+            dart_data_interpolated = dart_data_interpolated.interpolate().reset_index()
+
+            #print(dart_data_interpolated)
+            
+            df_darts = pd.concat([df_darts, dart_data_interpolated], ignore_index=True).drop_duplicates()
+
+        #print(df_darts)
+
+        # Convert back to dictionary format
+        interpolated_darts = {}
+        #print("interpolated: ", interpolated_darts)
+        for _, row in df_darts.iterrows():
+            frame = int(row["frame"])
+            track_id = int(row["track_id"])
+            
+            
+            if track_id not in interpolated_darts:
+                interpolated_darts[track_id] = {} 
+            
+            interpolated_darts[track_id][frame] = {
                 "bbox": [row["x1"], row["y1"], row["x2"], row["y2"]]
             }
 
-        return interpolated_tip_positions
+        return interpolated_darts
+
+
 
     def get_object_tracks(self, frames, read_from_stub=False, stub_path=None):
         """
@@ -153,8 +194,8 @@ class TrackerDarts:
 
             #print("tracks[linked_darts]", tracks["linked_darts"])
             for frame_num, linked_darts_data in enumerate(tracks["linked_darts"]):
-                print(f"Starting linked_darts for frame {frame_num}:")
-                print(linked_darts_data)
+                #print(f"Starting linked_darts for frame {frame_num}:")
+                #print(linked_darts_data)
                 if frame_num == 60:
                     break
             return tracks
@@ -171,7 +212,7 @@ class TrackerDarts:
 
         # If part is not already linked, create a new virtual dart
         if not part_already_linked:
-            virtual_dart_id = f"virtual_{part_id}"
+            virtual_dart_id = part_id
             tracks["virtual_darts"][virtual_dart_id] = {
                 "bbox": part_bbox,
                 "parts": {part_name: part_id, "tip": None, "barrel": None, "shaft": None, "flight": None},
@@ -251,8 +292,6 @@ class TrackerDarts:
         return distance <= threshold
     
     
-            
-            
          
     def draw_annotations(self, video_frames, tracks):
         output_video_frames = []
@@ -260,15 +299,21 @@ class TrackerDarts:
         for frame_num, frame in enumerate(video_frames):
             frame = frame.copy()
             
-            linked_darts_dic = tracks["linked_darts"][frame_num]
+            linked_darts_dic = {}  # Collect all darts for this frame
+            
+            for track_id, dart_frames in tracks.items():
+                if frame_num in dart_frames:  # ✅ Check if frame exists
+                    linked_darts_dic[track_id] = dart_frames[frame_num]
 
-            for track_id, dart in linked_darts_dic.items():
-                
-                frame = self.draw_rectangle(frame, dart["bbox"])
+            #print("Frame:", frame_num, "Darts:", linked_darts_dic)
+
+            for dart in linked_darts_dic.values():
+                frame = self.draw_dart_rectangle(frame, dart["bbox"])
 
             output_video_frames.append(frame)
 
         return output_video_frames
+
 
     
     
@@ -318,26 +363,33 @@ class TrackerDarts:
         return frame
     
     
-    def draw_rectangle(self, frame, bbox):
-        x1, y1, x2, y2 = bbox
-
-        cv2.rectangle(frame,
-                    (int(x1), int(y1)),
-                    (int(x2), int(y2)),
-                    (255, 255, 0),
-                    thickness=2)
+    def draw_dart_rectangle(self, frame, bbox):
+        """
+        Draws a bounding box around the dart with a label.
         
-        cv2.rectangle(frame,
-                    (int(x1)+10, int(y1)+20),
-                    (int(x2), int(y2)),
-                    (211, 211, 211),
-                    cv2.FILLED)
-        cv2.putText(frame,
-                    "Dart",
-                    (int(x1) + 10, int(y1) + 20),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.6,
-                    (0, 0, 0),
-                    2)
+        :param frame: The image frame.
+        :param bbox: Bounding box coordinates (x1, y1, x2, y2).
+        """
+        if bbox is None or len(bbox) != 4:
+            print("Invalid bounding box:", bbox)
+            return frame  # Avoid crashing if bbox is not valid
+
+        # Convert to integers to avoid OpenCV errors
+        x1, y1, x2, y2 = map(int, bbox)
+        color = (0, 255, 255)  # Cyan color
+
+        # Draw main bounding box
+        cv2.rectangle(frame, (x1, y1), (x2, y2), color, thickness=3)
+
+        # Prepare label text
+        label_text = "Dart"
+        (text_w, text_h), _ = cv2.getTextSize(label_text, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)
+
+        # Draw background rectangle for text
+        cv2.rectangle(frame, (x1, y1 - text_h - 10), (x1 + text_w + 10, y1), color, cv2.FILLED)
+
+        # Put label text
+        cv2.putText(frame, label_text, (x1 + 5, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 0), 2)
 
         return frame
+
