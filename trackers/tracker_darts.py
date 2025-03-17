@@ -44,11 +44,8 @@ class TrackerDarts:
                     x1, y1, x2, y2 = data["bbox"]
                     all_darts.append({"frame": frame_num, "track_id": track_id, "x1": x1, "y1": y1, "x2": x2, "y2": y2})
 
-        #print("all darts: ", all_darts)
         # Convert list to DataFrame
         df_darts = pd.DataFrame(all_darts, columns=["frame", "track_id", "x1", "y1", "x2", "y2"])
-        #print(df_darts)
-        #print(f"items(): {df_darts.items()}")
 
 
         # Interpolate for each dart from its first appearance to its last frame
@@ -71,16 +68,13 @@ class TrackerDarts:
             dart_data_interpolated = dart_data[dart_data["frame"] <= last_frame]
             dart_data_interpolated = dart_data_interpolated.set_index("frame").reindex(range(first_frame, last_frame + 1))
             dart_data_interpolated = dart_data_interpolated.interpolate().reset_index()
-
-            #print(dart_data_interpolated)
             
             df_darts = pd.concat([df_darts, dart_data_interpolated], ignore_index=True).drop_duplicates()
 
-        #print(df_darts)
 
         # Convert back to dictionary format
         interpolated_darts = {}
-        #print("interpolated: ", interpolated_darts)
+        
         for _, row in df_darts.iterrows():
             frame = int(row["frame"])
             track_id = int(row["track_id"])

@@ -67,4 +67,52 @@ class TrackerBull:
             output_video_frames.append(frame)
             
         return output_video_frames
-
+    
+    def interpolate_bull_positions(self, bull_positions, max_gap_frames=30):
+        """
+        Interpolates bull positions from the first detected frame up to max_gap_frames later.
+        If it is detected again, a new interpolation starts from that frame.
+        """
+        extracted_positions = []
+        for frame_idx, frame_data in enumerate(bull_positions):
+            if 1 in frame_data and "bbox" in frame_data[1]:
+                extracted_positions.append({"frame": frame_idx, "bbox": frame_data[1]["bbox"]})
+        
+        df_bull_positions = pd.DataFrame(extracted_positions)
+        if df_bull_positions.empty:
+            return bull_positions  # No detections, return original list
+        
+        df_bull_positions.set_index("frame", inplace=True)
+        df_bull_positions = df_bull_positions.sort_index()
+        
+        # Group frames into separate sequences where gaps exceed max_gap_frames
+        grouped_detections = []
+        current_group = []
+        prev_frame = None
+        
+        for _, row in df_bull_positions.iterrows():
+            frame = row.name
+            if prev_frame is not None and frame - prev_frame > max_gap_frames:
+                grouped_detections.append(current_group)
+                current_group = []
+            current_group.append((frame, row["bbox"]))
+            prev_frame = frame
+        
+        if current_group:
+            grouped_detections.append(current_group)
+        
+        # Perform interpolation for each group separately
+        for group in grouped_detections:
+            frames, bboxes = zip(*group)
+            df_group = pd.DataFrame(bboxes, index=frames, columns=["x1", "y1", "x2", "y2"])
+            df_group = df_group.reindex(range(frames[0], min(frames[-1] + max_gap_frames, len(bull_positions))))
+            df_group = df_group.interpolate().bfill()
+            
+            # Apply back to original list
+            for frame, row in df_group.iterrows():
+                if frame < len(bull_positions):
+                    if 1 not in bull_positions[frame]:
+                        bull_positions[frame][1] = {}
+                    bull_positions[frame][1]["bbox"] = row.tolist()
+        
+        return bull_positions
