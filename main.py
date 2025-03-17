@@ -1,5 +1,5 @@
 from utils import read_video, save_video
-from trackers import TrackerDarts
+from trackers import TrackerDarts, TrackerBull
 
 #Remember, right now the best model to use it is by far model 3
 
@@ -8,11 +8,15 @@ def main():
     
     tracker_darts = TrackerDarts('models/tracker_darts.pt')
     tracks_darts = tracker_darts.get_object_tracks(video_frames,read_from_stub=False,stub_path="stubs/track_stubs.pkl")
-    
     tracks_darts["linked_darts"] = tracker_darts.interpolate_darts_positions(tracks_darts)
+    
+    tracker_bull = TrackerBull('models/center_tracker.pt')
+    tracks_bull = tracker_bull.get_object_tracks(video_frames)
      
     output_video_frames = tracker_darts.draw_annotations(video_frames,tracks_darts)
-    save_video(output_video_frames, "outputs/output_video.avi") # save video
+    output_video_frames = tracker_bull.draw_annotations(output_video_frames,tracks_bull)
+    
+    save_video(output_video_frames, "outputs/output_video.avi")
     
     
     
@@ -47,5 +51,9 @@ This is how we are gonna detect points:
 2. When we don't have the tip, we are going to project the other parts of the dart on the board and then we are gonna do the same thing as before.
 3. When there is the zoom and the board is not detected anymore, so we are interpolate it, until we don't detect it once more and so we are updating it
 4. When the bulleye is not detected we are interpolating it until we don't update it
+
+One day I have also to modify to usage also of the stub_path
+
+We have to try to interpolate both BOARD and BULL!!!
 
 '''

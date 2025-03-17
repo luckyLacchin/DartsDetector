@@ -20,7 +20,7 @@ class TrackerDarts:
         batch_size=20 
         detections = [] 
         for i in range(0,len(frames),batch_size):
-            detections_batch = self.model.predict(frames[i:i+batch_size],conf=0.4) 
+            detections_batch = self.model.predict(frames[i:i+batch_size],conf=0.4) #maybe here i can write also a lower conf
             detections += detections_batch
 
         return detections
@@ -108,7 +108,10 @@ class TrackerDarts:
             return tracks
         else:
             detections = self.detect_frames(frames)
-            
+            min_conf_board = 0.4
+            min_conf = 0.8
+        
+        
             tracks = {
                 "board": [],
                 "darts": [],  # Full dart detections
@@ -147,24 +150,25 @@ class TrackerDarts:
                     bbox = frame_detection[0].tolist()
                     cls_id = frame_detection[3]
                     track_id = frame_detection[4]
+                    conf = frame_detection[2]
 
-                    if cls_id == cls_names_inv["Dart"]:
+                    if cls_id == cls_names_inv["Dart"] and conf > min_conf:
                         detected_darts[track_id] = {"bbox": bbox, "parts": {"tip": None, "barrel": None, "shaft": None, "flight": None}, "frame_num": frame_num}
                         tracks["darts"][frame_num][track_id] = {"bbox": bbox}
 
-                    elif cls_id == cls_names_inv["Tip"]:
+                    elif cls_id == cls_names_inv["Tip"] and conf > min_conf:
                         detected_parts.append(("tip", track_id, bbox))
                         tracks["tips"][frame_num][track_id] = {"bbox": bbox}
 
-                    elif cls_id == cls_names_inv["Barrel"]:
+                    elif cls_id == cls_names_inv["Barrel"] and conf > min_conf: 
                         detected_parts.append(("barrel", track_id, bbox))
                         tracks["barrels"][frame_num][track_id] = {"bbox": bbox}
 
-                    elif cls_id == cls_names_inv["Shaft"]:
+                    elif cls_id == cls_names_inv["Shaft"] and conf > min_conf:
                         detected_parts.append(("shaft", track_id, bbox))
                         tracks["shafts"][frame_num][track_id] = {"bbox": bbox}
 
-                    elif cls_id == cls_names_inv["Flight"]:
+                    elif cls_id == cls_names_inv["Flight"] and conf > min_conf:
                         detected_parts.append(("flight", track_id, bbox))
                         tracks["flights"][frame_num][track_id] = {"bbox": bbox}
                 
@@ -173,7 +177,7 @@ class TrackerDarts:
                     bbox = frame_detection[0].tolist()
                     cls_id = frame_detection[3]
 
-                    if cls_id == cls_names_inv['Board']:
+                    if cls_id == cls_names_inv['Board'] and conf > min_conf_board:
                         tracks["board"][frame_num][1] = {"bbox":bbox}
 
                 all_detected_parts.append((frame_num, detected_parts))
