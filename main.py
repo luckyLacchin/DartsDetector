@@ -1,5 +1,6 @@
-from utils import read_video, save_video
+from utils import read_video, save_video, get_center_of_bbox
 from trackers import TrackerDarts, TrackerBull
+from scores_assigner import ScoresAssigner
 
 #Remember, right now the best model to use it is by far model 3
 
@@ -12,11 +13,64 @@ def main():
     
     tracker_bull = TrackerBull('models/center_tracker.pt')
     tracks_bull = tracker_bull.get_object_tracks(video_frames)
+    tracks_bull = tracker_bull.interpolate_bull_positions(tracks_bull)
+    '''
+    #Assign sector board
+
+    for frame_num, dart_track in enumerate(tracks_darts['linked_darts']):
+        
+        dartboard_center = tracker_bull.get_center_of_bull(tracks_darts, frame_num) #continue from here...
+        scores_assigner = ScoresAssigner(dartboard_center)
+        
+        # Get the dart's bounding box for the current frame (this is the tip of the dart)
+        dart_bbox = tracks_darts['linked_darts'][frame_num]['bbox']
+        print(f"dart_bbox: {dart_bbox}")
+        
+        # Assign the dart to a sector using the ScoresAssigner class
+        dart_center = get_center_of_bbox(dart_bbox)
+        sector = scores_assigner.assign_sector(dart_center)
+        
+        # Optionally, update the tracks with the assigned sector and score for visualization
+        score = scores_assigner.assign_score(sector)
+        tracks_darts['linked_darts'][frame_num][1]['sector'] = sector
+        tracks_darts['linked_darts'][frame_num][1]['score'] = score
+    '''
+    #print("tracks__bull: ", tracks_bull)
+    # Assign sector board
+    for frame_num in range(len(tracks_darts['linked_darts'])):
+        
+        center = tracker_bull.get_center_of_bull(tracks_bull, frame_num)
+        if center is None:
+            #print("ciao0")
+            #We have to handle it in some way, due to the zoom and other stuff
+            continue
+        else:
+            x_center, y_center = center
+        scores_assigner = ScoresAssigner(x_center, y_center)
+
+        # Get darts for the current frame (if any)
+        linked_darts_dic = tracks_darts['linked_darts'][frame_num] if frame_num < len(tracks_darts['linked_darts']) else {}
+
+        if linked_darts_dic:
+            # Get the last detected dart (highest track_id)
+            last_track_id = max(linked_darts_dic.keys())
+            dart_bbox = linked_darts_dic[last_track_id]["bbox"]
+
+            # Assign the dart to a sector
+            x_center, y_center = get_center_of_bbox(dart_bbox)
+            dart_center = [x_center, y_center]
+            sector = scores_assigner.assign_sector(dart_center)
+            # Update tracks with assigned sector and score
+            score = scores_assigner.assign_score(sector)
+            tracks_darts['linked_darts'][frame_num][last_track_id]['sector'] = sector
+            tracks_darts['linked_darts'][frame_num][last_track_id]['score'] = score
+
+    
      
     output_video_frames = tracker_darts.draw_annotations(video_frames,tracks_darts)
     output_video_frames = tracker_bull.draw_annotations(output_video_frames,tracks_bull)
     
-    save_video(output_video_frames, "outputs/output_video.avi")
+    save_video(output_video_frames, "outputs/output_video_test3.avi")
     
     
     
@@ -53,7 +107,15 @@ This is how we are gonna detect points:
 4. When the bulleye is not detected we are interpolating it until we don't update it
 
 One day I have also to modify to usage also of the stub_path
-
+TODO:
 We have to try to interpolate both BOARD and BULL!!!
+Then retrain the detect darts
+Just use the angles, bull and the position of the darts in order to compute the points...we can't fix the perspective..
+
+In the case that i'm drawing a part of the dart that is not the dart itself, i could do it bigger...ofc it is in the case of virtual_darts..
+
+18 degrees per sector
+TODO
+Now it should work, i have to adjust the angle for the sector assignments!
 
 '''

@@ -47,43 +47,32 @@ class TrackerDarts:
         # Convert list to DataFrame
         df_darts = pd.DataFrame(all_darts, columns=["frame", "track_id", "x1", "y1", "x2", "y2"])
 
-
         # Interpolate for each dart from its first appearance to its last frame
         for track_id in df_darts["track_id"].unique():
             dart_data = df_darts[df_darts["track_id"] == track_id]
-            #print(dart_data)
             if dart_data.empty:
                 continue
             
             first_frame = dart_data["frame"].min()
             last_frame = dart_data["frame"].max()
-            
-            first_frame = int(first_frame)
-            last_frame = int(last_frame)
-            '''
-            print(f"first: {first_frame}")
-            print(f"last_frame: {last_frame}")
-            '''
+
             # Interpolate from first to last frame
-            dart_data_interpolated = dart_data[dart_data["frame"] <= last_frame]
-            dart_data_interpolated = dart_data_interpolated.set_index("frame").reindex(range(first_frame, last_frame + 1))
+            dart_data_interpolated = dart_data.set_index("frame").reindex(range(first_frame, last_frame + 1))
             dart_data_interpolated = dart_data_interpolated.interpolate().reset_index()
-            
+
             df_darts = pd.concat([df_darts, dart_data_interpolated], ignore_index=True).drop_duplicates()
 
+        # Convert back to frame-based dictionary (expected format)
+        interpolated_darts = {frame: {} for frame in frame_keys}
 
-        # Convert back to dictionary format
-        interpolated_darts = {}
-        
         for _, row in df_darts.iterrows():
             frame = int(row["frame"])
             track_id = int(row["track_id"])
-            
-            
-            if track_id not in interpolated_darts:
-                interpolated_darts[track_id] = {} 
-            
-            interpolated_darts[track_id][frame] = {
+
+            if frame not in interpolated_darts:
+                interpolated_darts[frame] = {}  
+
+            interpolated_darts[frame][track_id] = {
                 "bbox": [row["x1"], row["y1"], row["x2"], row["y2"]]
             }
 
@@ -302,30 +291,28 @@ class TrackerDarts:
         # Check if the distance is less than or equal to the threshold
         return distance <= threshold
     
-    
-    
+
     def draw_annotations(self, video_frames, tracks):
         output_video_frames = []
 
         for frame_num, frame in enumerate(video_frames):
             frame = frame.copy()
-            
-            linked_darts_dic = {}  # Collect all darts for this frame
-            board_dict = tracks["board"][frame_num]
-            
-            #Draw darts
-            for track_id, dart_frames in tracks["linked_darts"].items():
-                if frame_num in dart_frames:  
-                    linked_darts_dic[track_id] = dart_frames[frame_num]
 
+            # Get darts in the current frame
+            linked_darts_dic = tracks["linked_darts"][frame_num] if frame_num < len(tracks["linked_darts"]) else {}
 
-            for dart in linked_darts_dic.values():
-                frame = draw_rectangle(frame, dart["bbox"],"Dart",(0,0,255))
-                
-                
-            #Draw board
+            # Get board in the current frame
+            board_dict = tracks["board"][frame_num] if frame_num < len(tracks["board"]) else {}
+
+            # Draw the last detected dart (highest track_id)
+            if linked_darts_dic:
+                last_track_id = max(linked_darts_dic.keys())
+                dart = linked_darts_dic[last_track_id]
+                frame = draw_rectangle(frame, dart["bbox"], "Dart", (0, 0, 255))
+
+            # Draw the board
             for track_id, board in board_dict.items():
-                frame = draw_rectangle(frame, board["bbox"],"Board",(0,255,0))
+                frame = draw_rectangle(frame, board["bbox"], "Board", (0, 255, 0))
 
             output_video_frames.append(frame)
 

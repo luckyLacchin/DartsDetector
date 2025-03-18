@@ -24,7 +24,6 @@ class TrackerBull:
 
         return detections
     
-    
     def get_object_tracks(self, frames, read_from_stub=False, stub_path=None):
 
         detections = self.detect_frames(frames)
@@ -116,3 +115,63 @@ class TrackerBull:
                     bull_positions[frame][1]["bbox"] = row.tolist()
         
         return bull_positions
+    
+   #Right now we are not using this function 
+    def get_first_bull_center(self, tracks_bull):
+        # Iterate through the list to find the first bull's center
+        for frame_data in tracks_bull:
+            if 'bull' in frame_data:  # Check if 'bull' data exists in the current frame
+                bull_data = frame_data['bull']
+                if bull_data and 1 in bull_data:  # Check if the bull data exists and contains the key '1'
+                    bull_bbox = bull_data[1]['bbox']
+                    return get_center_of_bbox(bull_bbox)
+
+        return None  # Return None if no bull is found
+    
+    
+    def get_latest_bull_center(self, tracks_bull, frame_num):
+        # Iterate through the list up to the current frame number (inclusive)
+        for frame_data in reversed(tracks_bull[:frame_num+1]):
+            if 'bull' in frame_data:  # Check if 'bull' data exists in the current frame
+                bull_data = frame_data['bull']
+                if bull_data and 1 in bull_data:  # Check if the bull data exists and contains the key '1'
+                    bull_bbox = bull_data[1]['bbox']
+                    return get_center_of_bbox(bull_bbox)
+
+        return None  # Return None if no bull is found
+
+
+
+    
+    '''
+    def get_center_of_bull(self, tracks_bull, frame_num):
+        # Iterate backwards through the frames in the list starting from frame_num
+        for fn in range(frame_num, -1, -1):
+            # Ensure that tracks_bull[fn] exists and has a 'bull' entry
+            if len(tracks_bull) > fn and 'bull' in tracks_bull[fn]:
+                bull_data = tracks_bull[fn]['bull']
+                if bull_data and 1 in bull_data:  # Check if bull data exists and contains the key '1'
+                    bull_bbox = bull_data[1]['bbox']  # Get the bounding box of the bull
+                    return get_center_of_bbox(bull_bbox)
+
+        # If no bull was detected in the previous frames, return the first detected bull
+        first_bull_center = self.get_latest_bull_center(tracks_bull,frame_num)
+        
+        # If a first bull is found, return its center, else return None
+        return first_bull_center if first_bull_center else None
+    '''
+    
+    def get_center_of_bull(self, tracks_bull, frame_num):
+        # Iterate backwards through the frames in the list starting from frame_num
+        for fn in range(frame_num, -1, -1):
+            # Ensure that tracks_bull[fn] exists and contains the key '1' (which represents bull data)
+            if len(tracks_bull) > fn and 1 in tracks_bull[fn]:
+                bull_data = tracks_bull[fn][1]
+                bull_bbox = bull_data['bbox']
+                return get_center_of_bbox(bull_bbox)
+
+        # If no bull was detected in the previous frames, return the latest detected bull up to frame_num
+        first_bull_center = self.get_latest_bull_center(tracks_bull, frame_num)
+        
+        # If a first bull is found, return its center, else return None
+        return first_bull_center if first_bull_center else None
