@@ -304,11 +304,12 @@ class TrackerDarts:
             # Get board in the current frame
             board_dict = tracks["board"][frame_num] if frame_num < len(tracks["board"]) else {}
 
+
+
             # Draw the last detected dart (highest track_id)
             if linked_darts_dic:
-                last_track_id = max(linked_darts_dic.keys())
-                dart = linked_darts_dic[last_track_id]
-                frame = draw_rectangle(frame, dart["bbox"], "Dart", (0, 0, 255))
+                for track_id, dart in linked_darts_dic.items():
+                    frame = draw_rectangle(frame, dart["bbox"], "Dart", (0, 0, 255))
 
             # Draw the board
             for track_id, board in board_dict.items():

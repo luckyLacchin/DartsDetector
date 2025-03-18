@@ -12,14 +12,14 @@ class ScoresAssigner:
         """
         Calculate the angle between the dart and the center of the bullseye.
         """
-        dx = dart_center[0] - self.dartboard_center[0]
-        dy = dart_center[1] - self.dartboard_center[1]
+        dx = abs(dart_center[0] - self.dartboard_center[0])
+        dy = abs(dart_center[1] - self.dartboard_center[1])
+        #print(f"dart_center_x: {dart_center[0]}, dart_center_y: {dart_center[1]}")
+        #print(f"dartboard_center_x: {self.dartboard_center[0]}, dartboard_center_y: {self.dartboard_center[1]}")
         
-        # Calculate the angle in radians
-        angle = math.atan2(dy, dx)  # Angle from the horizontal axis (in radians)
+        angle = math.atan2(dx, dy)
         
-        # Convert angle to degrees (from 0 to 360 degrees)
-        angle_deg = math.degrees(angle) % 360  # Ensuring it's positive
+        angle_deg = math.degrees(angle) % 360
         
         return angle_deg
 
@@ -29,7 +29,7 @@ class ScoresAssigner:
         Each sector is 18 degrees wide (360 / 20 = 18).
         """
         angle = self.calculate_angle(dart_center)
-        
+        #print("angle: ", angle)
         # Determine the sector number (0-19)
         sector_number = int(angle // (360 / self.sectors))  # Integer division
         return sector_number
