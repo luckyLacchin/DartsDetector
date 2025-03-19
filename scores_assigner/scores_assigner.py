@@ -54,15 +54,17 @@ class ScoresAssigner:
         return angle_deg
 
     def assign_sector(self, dart_center):
-        """
-        Assign the sector based on the angle.
-        Each sector is 18 degrees wide (360 / 20 = 18).
-        """
+
         angle = self.calculate_angle(dart_center)
-        print("angle: ", angle)
-        # Determine the sector number (0-19)
-        sector_number = int(angle // (360 / self.sectors))  # Integer division
-        return sector_number
+        offset = 15 # it can be changed
+        # due to perspective, i have to adjust the value with an offset, the offset should be chosen carefully
+        angle = angle - offset if angle <= 180 else angle + offset
+        angle = max(angle, 0)  # Ensure angle is not negative
+
+        #print("Angle:", angle)
+
+        return int(angle // (360 / self.sectors)) 
+
 
     def assign_score(self, sector):
         """
@@ -97,31 +99,34 @@ class ScoresAssigner:
 
     def draw_scores(self, video_frames, tracks):
         output_video_frames = []
+        last_score = None
         
         for frame_num, frame in enumerate(video_frames):
             frame = frame.copy()
-
             linked_darts_dic = tracks["linked_darts"][frame_num] if frame_num < len(tracks["linked_darts"]) else {}
 
-            # Draw the last detected dart score
+            # If there's a detected dart in this frame, update the score
             if linked_darts_dic:
                 last_track_id = max(linked_darts_dic.keys())
                 dart = linked_darts_dic[last_track_id]
 
                 if "score" in dart and dart["score"] is not None:
-                    overlay = frame.copy()
-                    
-                    cv2.rectangle(overlay, (10, frame.shape[0] - 60), (350, frame.shape[0] - 10), (255, 255, 255), -1)
-                    alpha = 0.6
-                    frame = cv2.addWeighted(overlay, alpha, frame, 1 - alpha, 0)
+                    last_score = dart["score"]
 
-                    # Draw the text
-                    text = f"Score Last Dart: {dart['score']}"  
-                    cv2.putText(frame, text, (20, frame.shape[0] - 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 3)
+            # Draw the last detected score if available
+            if last_score is not None:
+                overlay = frame.copy()
+                cv2.rectangle(overlay, (10, frame.shape[0] - 60), (350, frame.shape[0] - 10), (255, 255, 255), -1)
+                alpha = 0.6
+                frame = cv2.addWeighted(overlay, alpha, frame, 1 - alpha, 0)
+
+                text = f"Score Last Dart: {last_score}"
+                cv2.putText(frame, text, (20, frame.shape[0] - 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 3)
 
             output_video_frames.append(frame)
         
         return output_video_frames
+
 
 
 '''

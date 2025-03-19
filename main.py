@@ -59,11 +59,11 @@ def main():
             dart_center = [x_center, y_center]
             
             if last_track_id in tracks_darts["virtual_darts"]: #if it is virtual, i have to project it
-                print("VIRTUAL")
+                #print("VIRTUAL")
 
                 board_bbox = tracker_darts.get_latest_board_center(tracks_darts,frame_num)
                 if board_bbox is not None:
-                    print("Not None")
+                    #print("Not None")
                     dart_center = scores_assigner.project_part_on_board(dart_center,board_bbox)
             
             # Assign the dart to a sector
@@ -71,9 +71,9 @@ def main():
             # Update tracks with assigned sector and score
             score = scores_assigner.assign_score(sector)
             tracks_darts['linked_darts'][frame_num][last_track_id]['sector'] = sector
-            print("sector: ", sector)
+            #print("sector: ", sector)
             tracks_darts['linked_darts'][frame_num][last_track_id]['score'] = score
-            print("score: ", score)
+            #print("score: ", score)
         
         '''    
         # Get the latest board bbox
@@ -86,7 +86,7 @@ def main():
     output_video_frames = tracker_bull.draw_annotations(output_video_frames,tracks_bull)
     output_video_frames = scores_assigner.draw_scores(output_video_frames,tracks_darts)
     
-    save_video(output_video_frames, "outputs/output_video_test4.avi")
+    save_video(output_video_frames, "outputs/output_video_test5.avi")
     
 
     

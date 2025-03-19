@@ -308,7 +308,19 @@ class TrackerDarts:
 
             if linked_darts_dic:
                 for track_id, dart in linked_darts_dic.items():
-                    frame = draw_rectangle(frame, dart["bbox"], "Dart", (0, 0, 255))
+                    if track_id in tracks["virtual_darts"]:
+                        # Scale bbox by 1.5 for virtual_darts
+                        x1, y1, x2, y2 = dart["bbox"]
+                        width = x2 - x1
+                        height = y2 - y1
+                        x1_scaled = x1 - width * 0.5
+                        y1_scaled = y1 - height * 0.5
+                        x2_scaled = x2 + width * 0.5
+                        y2_scaled = y2 + height * 0.5
+                        frame = draw_rectangle(frame, (x1_scaled, y1_scaled, x2_scaled, y2_scaled), "Dart", (0, 0, 255))
+                    else:
+                        frame = draw_rectangle(frame, dart["bbox"], "Dart", (0, 0, 255))
+
 
             # Draw the board
             for track_id, board in board_dict.items():
