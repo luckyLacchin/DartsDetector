@@ -55,24 +55,39 @@ def main():
             # Get the last detected dart (highest track_id)
             last_track_id = max(linked_darts_dic.keys())
             dart_bbox = linked_darts_dic[last_track_id]["bbox"]
-
-            # Assign the dart to a sector
             x_center, y_center = get_center_of_bbox(dart_bbox)
             dart_center = [x_center, y_center]
+            
+            if last_track_id in tracks_darts["virtual_darts"]: #if it is virtual, i have to project it
+                print("VIRTUAL")
+
+                board_bbox = tracker_darts.get_latest_board_center(tracks_darts,frame_num)
+                if board_bbox is not None:
+                    print("Not None")
+                    dart_center = scores_assigner.project_part_on_board(dart_center,board_bbox)
+            
+            # Assign the dart to a sector
             sector = scores_assigner.assign_sector(dart_center)
             # Update tracks with assigned sector and score
             score = scores_assigner.assign_score(sector)
             tracks_darts['linked_darts'][frame_num][last_track_id]['sector'] = sector
+            print("sector: ", sector)
             tracks_darts['linked_darts'][frame_num][last_track_id]['score'] = score
-
-    
+            print("score: ", score)
+        
+        '''    
+        # Get the latest board bbox
+        board_bbox = self.get_latest_board_center(tracks, frame_num)
+        if board_bbox is None:
+            return None  # No board detected, cannot project
+        '''
      
     output_video_frames = tracker_darts.draw_annotations(video_frames,tracks_darts)
     output_video_frames = tracker_bull.draw_annotations(output_video_frames,tracks_bull)
     
-    save_video(output_video_frames, "outputs/output_video_test3.avi")
+    save_video(output_video_frames, "outputs/output_video_test4.avi")
     
-    
+
     
 if __name__ == "__main__":
     main()
@@ -80,42 +95,10 @@ if __name__ == "__main__":
     
 
 '''
-What are the next steps to do?
-1. Solve absolute position even though there is zoom (it would be fondamental in order to get the points)
-2. Training model for finding the center (inner and outer bullet) from that we can find the
-points/value of the darts thrown
-3. After got it, dysplay on the video the value of it
-'''
+What is missing?
+1. Writing the value of the dart in the frame
+2. Do the rectangle of the dart bigger, just xn for some values
+3. Fix the perspective
 
-'''
-Next things to do:
-- maybe redo the training of the first model used but for 400 trials, maybe a bit more...
-- see how the bbox of the board is.
-- use the tip and the angle in order to get the points
-- we can detect also the board (confidence > 85) and the bullseye
-- to handle the camera movements for the zoom and perspective for the angle
-
-
-Tbh idk if it makes sense to interpolate the position of the board, due to zoom and also because the board is not always in the frame...To know the board, it would be very useful to do the projection of the dart on the board in order to get the points...I think that first, it would be very useful to redo the first model detect...https://universe.roboflow.com/julian-mowkv/detectdarts/browse?queryText=&pageSize=50&startingIndex=0&browseQuery=true
-For the perspective estimator i need a model for this: https://universe.roboflow.com/model-training-inclp/dart-blade-intersection/browse?queryText=&pageSize=50&startingIndex=0&browseQuery=true
-
-
-This is how we are gonna detect points:
-1. We are gonna use the bulleye. Given the position of it and of the tip, we are gonna measure the angle between the center and the tip. For the perspective problem, we are going to use the outer points in order to know the real angle.
-2. When we don't have the tip, we are going to project the other parts of the dart on the board and then we are gonna do the same thing as before.
-3. When there is the zoom and the board is not detected anymore, so we are interpolate it, until we don't detect it once more and so we are updating it
-4. When the bulleye is not detected we are interpolating it until we don't update it
-
-One day I have also to modify to usage also of the stub_path
-TODO:
-We have to try to interpolate both BOARD and BULL!!!
-Then retrain the detect darts
-Just use the angles, bull and the position of the darts in order to compute the points...we can't fix the perspective..
-
-In the case that i'm drawing a part of the dart that is not the dart itself, i could do it bigger...ofc it is in the case of virtual_darts..
-
-18 degrees per sector
-TODO
-Now it should work, i have to adjust the angle for the sector assignments!
 
 '''

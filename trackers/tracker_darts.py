@@ -159,7 +159,8 @@ class TrackerDarts:
                 for frame_detection in detection_supervision:
                     bbox = frame_detection[0].tolist()
                     cls_id = frame_detection[3]
-
+                    conf = frame_detection[2]
+                    
                     if cls_id == cls_names_inv['Board'] and conf > min_conf_board:
                         tracks["board"][frame_num][1] = {"bbox":bbox}
 
@@ -318,3 +319,17 @@ class TrackerDarts:
             output_video_frames.append(frame)
 
         return output_video_frames
+    
+    def get_latest_board_center(self, tracks, frame_num):
+        # Ensure "board" exists in tracks
+        if "board" not in tracks:
+            return None
+        
+        # Iterate backwards over frames up to frame_num
+        for i in range(frame_num, -1, -1):  
+            frame_data = tracks["board"][i]  # Get the board data for frame i
+            if 1 in frame_data:  # Check if board ID 1 exists
+                return frame_data[1]["bbox"]  # Return the bbox
+
+        return None  # Return None if no board bbox is found
+

@@ -1,11 +1,40 @@
 import math
 from utils import get_center_of_bbox
+import numpy as np
+from trackers import TrackerDarts
 
 class ScoresAssigner:
     def __init__(self, x_center, y_center, sectors=20):
         # dartboard_center is the center of the bullseye (x, y)
         self.dartboard_center = [x_center, y_center]
         self.sectors = sectors
+        #self.board =
+        
+        
+
+    def project_part_on_board(self, dart_center, board_bbox):
+
+        # Get board center using the provided function
+        board_center = get_center_of_bbox(board_bbox)
+
+        # Compute vector from board center to dart
+        vector = np.array(dart_center) - np.array(board_center)
+
+        # Normalize the vector to get a unit direction
+        norm = np.linalg.norm(vector)
+        if norm == 0:
+            return board_center  # Dart is exactly at the board center
+
+
+        # Extract board bbox coordinates
+        x_min, y_min, x_max, y_max = board_bbox
+
+        # Project the dart center within the board bbox boundaries
+        projected_x = np.clip(dart_center[0], x_min, x_max)
+        projected_y = np.clip(dart_center[1], y_min, y_max)
+
+        return (projected_x, projected_y)
+
 
 
     def calculate_angle(self, dart_center):
@@ -29,7 +58,7 @@ class ScoresAssigner:
         Each sector is 18 degrees wide (360 / 20 = 18).
         """
         angle = self.calculate_angle(dart_center)
-        #print("angle: ", angle)
+        print("angle: ", angle)
         # Determine the sector number (0-19)
         sector_number = int(angle // (360 / self.sectors))  # Integer division
         return sector_number
