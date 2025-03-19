@@ -84,6 +84,7 @@ def main():
      
     output_video_frames = tracker_darts.draw_annotations(video_frames,tracks_darts)
     output_video_frames = tracker_bull.draw_annotations(output_video_frames,tracks_bull)
+    output_video_frames = scores_assigner.draw_scores(output_video_frames,tracks_darts)
     
     save_video(output_video_frames, "outputs/output_video_test4.avi")
     
@@ -99,6 +100,6 @@ What is missing?
 1. Writing the value of the dart in the frame
 2. Do the rectangle of the dart bigger, just xn for some values
 3. Fix the perspective
-
+4. Add in the training bull_tracker
 
 '''

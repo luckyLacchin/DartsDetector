@@ -2,6 +2,7 @@ import math
 from utils import get_center_of_bbox
 import numpy as np
 from trackers import TrackerDarts
+import cv2
 
 class ScoresAssigner:
     def __init__(self, x_center, y_center, sectors=20):
@@ -92,6 +93,36 @@ class ScoresAssigner:
             projected_center = self.project_part_on_board(dart_center)
             sector = self.assign_sector(projected_center)
             score = self.assign_score(sector)
+
+
+    def draw_scores(self, video_frames, tracks):
+        output_video_frames = []
+        
+        for frame_num, frame in enumerate(video_frames):
+            frame = frame.copy()
+
+            linked_darts_dic = tracks["linked_darts"][frame_num] if frame_num < len(tracks["linked_darts"]) else {}
+
+            # Draw the last detected dart score
+            if linked_darts_dic:
+                last_track_id = max(linked_darts_dic.keys())
+                dart = linked_darts_dic[last_track_id]
+
+                if "score" in dart and dart["score"] is not None:
+                    overlay = frame.copy()
+                    
+                    cv2.rectangle(overlay, (10, frame.shape[0] - 60), (350, frame.shape[0] - 10), (255, 255, 255), -1)
+                    alpha = 0.6
+                    frame = cv2.addWeighted(overlay, alpha, frame, 1 - alpha, 0)
+
+                    # Draw the text
+                    text = f"Score Last Dart: {dart['score']}"  
+                    cv2.putText(frame, text, (20, frame.shape[0] - 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 3)
+
+            output_video_frames.append(frame)
+        
+        return output_video_frames
+
 
 '''
 # Usage example:
