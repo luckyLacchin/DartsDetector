@@ -2,9 +2,6 @@
 
 DartsDetector is an advanced video analysis tool designed to detect darts, their components (tip, barrel, shaft, flight), and the dartboard in real-time. Leveraging YOLO models, this system can analyze darts games with minimal human intervention, providing automatic dart detection, score assignment, and bullseye detection, all integrated into a seamless workflow.
 
-🎥 **Demo Video:**  
-[![Watch the demo](https://img.icons8.com/ios-filled/452/video.png)](https://drive.google.com/file/d/1PPVUS4mfUHC9CDhEEpUWlUTZnlBnmQxh/view?usp=drive_link)
-
 🎥 **Demo Video:** [Watch here](https://drive.google.com/file/d/1PPVUS4mfUHC9CDhEEpUWlUTZnlBnmQxh/view?usp=drive_link)
 
 ## 📁 Table of Contents
