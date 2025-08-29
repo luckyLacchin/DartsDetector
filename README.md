@@ -5,6 +5,8 @@ DartsDetector is an advanced video analysis tool designed to detect darts, their
 🎥 **Demo Video:**  
 [![Watch the demo](https://img.icons8.com/ios-filled/452/video.png)](https://drive.google.com/file/d/1PPVUS4mfUHC9CDhEEpUWlUTZnlBnmQxh/view?usp=drive_link)
 
+🎥 **Demo Video:** [Watch here](https://drive.google.com/file/d/1PPVUS4mfUHC9CDhEEpUWlUTZnlBnmQxh/view?usp=drive_link)
+
 ## 📁 Table of Contents
 
 - [Features](#features)
